@@ -1,6 +1,8 @@
 <!doctype html><html><head><meta charset=utf8>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<style id="app-lock">html{-webkit-text-size-adjust:100%;text-size-adjust:100%}:where(html,body,*){touch-action:manipulation}</style>
+<style id="app-lock">html{-webkit-text-size-adjust:100%;text-size-adjust:100%}:where(html,body,*){touch-action:manipulation}.ph{display:inline-block;white-space:nowrap}
+.bubble{overflow:hidden}.phw{line-height:1.3}.phw .ph{display:block;white-space:nowrap;width:max-content;margin:0 auto}
+</style>
 <script id="app-lock-js">(function(){var s={passive:false},p=function(e){e.preventDefault()};
 ['gesturestart','gesturechange','gestureend'].forEach(function(t){document.addEventListener(t,p,s)});
 document.addEventListener('touchmove',function(e){if(e.touches&&e.touches.length>1)e.preventDefault()},s);
@@ -269,6 +271,20 @@ const LEVELS=[
   steps:[["穿雨鞋","先穿上雨鞋。"],["拿雨傘","再拿出雨傘。"],["打開傘","然後在門口打開雨傘。"],["撐傘出門","最後，撐著傘出門。"]]}]}
 ];
 const $=id=>document.getElementById(id);
+/* 斷句原則：只在標點後換行，一個短句不會被拆開；放不下就自動縮小字 */
+function phr(t){return String(t).replace(/[^，。！？；：…、]+[，。！？；：…、」』]*/g,m=>`<span class="ph">${m}</span>`)}
+function setB(t){const b=$("bubble"),cs=getComputedStyle(b);
+  const P=String(t).match(/[^，。！？；：…、]+[，。！？；：…、」』]*/g)||[String(t)],n=P.length;
+  const W=b.clientWidth-parseFloat(cs.paddingLeft)-parseFloat(cs.paddingRight)-2,H=b.clientHeight-4,maxF=b.clientWidth*.105;
+  function fit(lines){b.innerHTML="<div class=\"phw\">"+lines.map(l=>`<span class="ph">${l}</span>`).join("")+"</div>";const w=b.firstChild;
+    let lo=8,hi=maxF;for(let k=0;k<12;k++){const m=(lo+hi)/2;b.style.fontSize=m+"px";
+      if(w.offsetHeight<=H&&[...w.children].every(s=>s.offsetWidth<=W))lo=m;else hi=m}return lo}
+  let best=null,bf=0;
+  for(let mask=0;mask<(1<<Math.max(0,n-1));mask++){const lines=[];let cur=P[0];
+    for(let i=1;i<n;i++){if(mask&(1<<(i-1))){lines.push(cur);cur=P[i]}else cur+=P[i]}lines.push(cur);
+    if(lines.length>3)continue;const f=fit(lines);if(f>bf+.5){bf=f;best=lines}}
+  fit(best||P);b.style.fontSize=bf+"px"}
+
 let L=0,t=0,step=0,miss=0,soundOn=true,voice=null;
 const lv=()=>LEVELS[L];
 function pos(el,b){el.style.left=b.l+"%";el.style.top=b.t+"%";if(b.w!=null)el.style.width=b.w+"%";if(b.h!=null)el.style.height=b.h+"%"}
@@ -293,7 +309,7 @@ function setLevel(i){
 function render(){
   const v=lv(),task=v.tasks[t],n=task.steps.length;step=0;miss=0;$("think").hidden=true;
   $("dotsWrap").innerHTML=v.tasks.map((_,i)=>`<span class="dot ${i<t?"done":i===t?"now":""}" style="left:${v.dots.x[i]}%;top:${v.dots.y}%;width:${v.dots.w}%;height:${v.dots.h}%"></span>`).join("");
-  $("bubble").textContent=task.open;
+  setB(task.open);
   $("slotsWrap").innerHTML=task.steps.map((_,i)=>`<div class="slot ${i===0?"next":""}" style="${box(v.slots[i])}"></div><span class="num" style="left:${v.nums[i][0]}%;top:${v.nums[i][1]}%;width:${v.numW}%">${i+1}</span>`).join("")+(v.goal?`<div class="slot goal" id="goal" style="${box(v.goal)}"><span class="goaltxt">完成</span></div><span class="num star" style="left:${v.goalNum[0]}%;top:${v.goalNum[1]}%;width:${v.numW}%">★</span>`:"");
   $("tray").innerHTML=shuffle(n).map((i,k)=>{const s=task.steps[i];return `<button class="card" data-i="${i}" style="${box(v.cards[k])}" aria-label="${s[0]}">${pic(task,i+1)}<span class="cap">${s[0]}</span></button>`}).join("");
   $("tray").querySelectorAll(".card").forEach(c=>c.onclick=()=>tap(c));
@@ -346,20 +362,20 @@ function show(src,num){const a=$("mA"),b=$("mB"),[on,off]=flip?[a,b]:[b,a];flip=
   on.classList.remove("on");void on.offsetWidth;on.src=src;on.classList.add("on");off.classList.remove("on");$("mNum").textContent=num}
 async function playMovie(){
   const id=++movieId,v=lv(),task=v.tasks[t],last=t===v.tasks.length-1,n=task.steps.length;
-  $("mBtns").hidden=true;$("doneText").textContent="";
+  $("mBtns").hidden=true;$("doneText").innerHTML=phr("");
   $("mDots").innerHTML=Array.from({length:n+1},()=>"<span></span>").join("");
   const dots=$("mDots").children;
   for(let i=0;i<n;i++){
     if(id!==movieId)return;
     show(imgOr(task.id+"-"+(i+1),task.steps[i][0]),i+1);[...dots].forEach((d,k)=>d.classList.toggle("on",k<=i));
-    $("doneText").textContent=task.steps[i][1];
+    $("doneText").innerHTML=phr(task.steps[i][1]);
     await sayWait(task.steps[i][1],1900);
   }
   if(id!==movieId)return;
   show(imgOr(task.id+"-9","完成"),"");dots[n].classList.add("on");
-  $("doneText").textContent=task.done;await sayWait(task.done,2200);
+  $("doneText").innerHTML=phr(task.done);await sayWait(task.done,2200);
   if(id!==movieId)return;
-  if(last){if(v.allDone){show(IMG[v.allDone],"");$("mDots").innerHTML=""}$("doneText").textContent=v.finalText;await sayWait(v.finalText,1500)}
+  if(last){if(v.allDone){show(IMG[v.allDone],"");$("mDots").innerHTML=""}$("doneText").innerHTML=phr(v.finalText);await sayWait(v.finalText,1500)}
   if(id!==movieId)return;
   $("next").textContent=!last?"下一題":L<LEVELS.length-1?"挑戰"+LEVELS[L+1].name:"回主選單";
   $("mBtns").hidden=false;
@@ -370,7 +386,7 @@ $("next").onclick=()=>{movieId++;$("done").hidden=true;const v=lv();
   if(t<v.tasks.length-1){t++;render()}
   else if(L<LEVELS.length-1){setLevel(L+1);t=0;render()}
   else{$("start").hidden=false}};
-document.querySelectorAll("[data-lv]").forEach(b=>b.onclick=()=>{$("start").hidden=true;setLevel(+b.dataset.lv);t=0;render();const it=lv().intro;if(it){$("bubble").textContent=it;say(it);setTimeout(()=>{if(L===+b.dataset.lv&&t===0&&step===0){$("bubble").textContent=lv().tasks[0].open;say(lv().tasks[0].open)}},3600)}});
+document.querySelectorAll("[data-lv]").forEach(b=>b.onclick=()=>{$("start").hidden=true;setLevel(+b.dataset.lv);t=0;render();const it=lv().intro;if(it){setB(it);say(it);setTimeout(()=>{if(L===+b.dataset.lv&&t===0&&step===0){setB(lv().tasks[0].open);say(lv().tasks[0].open)}},3600)}});
 $("back").onclick=()=>{movieId++;stopVoice();$("done").hidden=true;$("start").hidden=false};
 $("sound").onclick=()=>{soundOn=!soundOn;$("mute").hidden=soundOn;$("mmute").hidden=soundOn;if(!soundOn)stopVoice()};
 $("startImg").src=IMG["sumi-idle"];setLevel(0);
